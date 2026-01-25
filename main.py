@@ -24,12 +24,12 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     print(f"""
 ╔═══════════════════════════════════════════════════════════════╗
-║                     ObradorIA Agent v{__version__}                     ║
+║                     ObradorIA Agent v{__version__}                    ║
 ╠═══════════════════════════════════════════════════════════════╣
 ║  Sistema inteligente de geração de orçamentos                 ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  Server: http://{settings.api_host}:{settings.api_port}                              ║
-║  Docs:   http://{settings.api_host}:{settings.api_port}/docs                         ║
+║  Server: http://{settings.api_host}:{settings.api_port}                                  ║
+║  Docs:   http://{settings.api_host}:{settings.api_port}/docs                             ║
 ╚═══════════════════════════════════════════════════════════════╝
     """)
 

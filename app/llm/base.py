@@ -49,6 +49,10 @@ class LLMProvider(ABC):
         """
         pass
 
+    async def health_check(self) -> bool:
+        """Verifica se o provider está acessível"""
+        return False
+
     async def close(self) -> None:
         """Fecha conexões (opcional)"""
         pass

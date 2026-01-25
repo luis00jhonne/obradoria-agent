@@ -11,10 +11,13 @@ from fastapi.responses import StreamingResponse
 from app.config import get_settings
 from app.llm import get_available_providers, get_llm_provider
 from app.core.orchestrator import BudgetOrchestrator
+from app.services.spring_client import get_spring_client
+from app.services.vector_search import check_database_connection
 from app.api.schemas import (
     BudgetRequest,
     BudgetResponse,
     HealthResponse,
+    ComponentHealthResponse,
     ProvidersResponse,
     ErrorResponse,
     DadosExtraidosResponse,
@@ -29,19 +32,60 @@ router = APIRouter()
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check():
-    """Verifica saúde da aplicação"""
+    """Verifica saúde da aplicação e conectividade dos componentes"""
     settings = get_settings()
-
-    # Verificar providers disponíveis
     providers = get_available_providers()
+    components = {}
 
-    # TODO: Verificar conexão com banco e API Spring
-    # Por enquanto retorna status fixo
+    # Verificar banco de dados (pgvector)
+    try:
+        db_ok = await check_database_connection()
+        components["database"] = ComponentHealthResponse(
+            status="ok" if db_ok else "indisponível",
+            detalhes=f"{settings.db_host}:{settings.db_port}/{settings.db_name}" if db_ok else "Falha na conexão"
+        )
+    except Exception as e:
+        components["database"] = ComponentHealthResponse(
+            status="indisponível",
+            detalhes=str(e)
+        )
+
+    # Verificar API Spring
+    try:
+        spring_client = get_spring_client()
+        spring_ok = await spring_client.health_check()
+        components["spring_api"] = ComponentHealthResponse(
+            status="ok" if spring_ok else "indisponível",
+            detalhes=settings.spring_api_url if spring_ok else "Falha na conexão"
+        )
+    except Exception as e:
+        components["spring_api"] = ComponentHealthResponse(
+            status="indisponível",
+            detalhes=str(e)
+        )
+
+    # Verificar LLM provider padrão
+    try:
+        llm = get_llm_provider()
+        llm_ok = await llm.health_check()
+        components["llm"] = ComponentHealthResponse(
+            status="ok" if llm_ok else "indisponível",
+            detalhes=f"{llm.name}" if llm_ok else f"{llm.name} - Falha na conexão"
+        )
+    except Exception as e:
+        components["llm"] = ComponentHealthResponse(
+            status="indisponível",
+            detalhes=str(e)
+        )
+
+    # Status geral
+    all_ok = all(c.status == "ok" for c in components.values())
+    status = "ok" if all_ok else "degradado"
+
     return HealthResponse(
-        status="ok",
-        llm_providers=providers,
-        database="não verificado",
-        spring_api="não verificado"
+        status=status,
+        components=components,
+        llm_providers=providers
     )
 
 
@@ -156,6 +200,7 @@ async def generate_budget(request: BudgetRequest):
             etapas=etapas,
             valor_total=resultado_final["valor_total"],
             estatisticas=estatisticas,
+            erros=resultado_final.get("erros", []),
             avisos=resultado_final.get("avisos", []),
             codigo_orcamento_criado=resultado_final.get("codigo_orcamento_criado"),
             codigo_obra_criada=resultado_final.get("codigo_obra_criada"),

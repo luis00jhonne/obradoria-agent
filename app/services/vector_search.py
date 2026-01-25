@@ -48,6 +48,17 @@ class VectorSearchService:
             await self._pool.close()
             self._pool = None
 
+    async def health_check(self) -> bool:
+        """Verifica se o banco de dados está acessível"""
+        if self._pool is None:
+            return False
+        try:
+            async with self._pool.acquire() as conn:
+                await conn.fetchval("SELECT 1")
+            return True
+        except Exception:
+            return False
+
     def _gerar_embedding(self, texto: str) -> List[float]:
         """Gera embedding para um texto"""
         if self._model is None:
@@ -110,7 +121,7 @@ class VectorSearchService:
 
         resultados = []
         for row in rows:
-            similaridade = float(row['similaridade'])
+            similaridade = float(row['similaridade'] or 0)
             resultados.append(ComposicaoSinapi(
                 codigo=str(row['codigo']),
                 nome=row['nome'],
@@ -202,3 +213,29 @@ async def close_vector_search_service() -> None:
     if _vector_search_service:
         await _vector_search_service.close()
         _vector_search_service = None
+
+
+async def check_database_connection() -> bool:
+    """
+    Verifica conectividade com o banco de dados sem inicializar o serviço completo.
+    Se o serviço já estiver inicializado, usa o pool existente.
+    Caso contrário, faz uma conexão direta rápida.
+    """
+    if _vector_search_service and _vector_search_service._pool:
+        return await _vector_search_service.health_check()
+
+    settings = get_settings()
+    try:
+        conn = await asyncpg.connect(
+            host=settings.db_host,
+            port=settings.db_port,
+            database=settings.db_name,
+            user=settings.db_user,
+            password=settings.db_password,
+            timeout=5
+        )
+        await conn.fetchval("SELECT 1")
+        await conn.close()
+        return True
+    except Exception:
+        return False

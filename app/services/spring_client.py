@@ -61,13 +61,22 @@ class SpringAPIClient:
             await self._client.aclose()
             self._client = None
 
+    async def health_check(self) -> bool:
+        """Verifica se a API Spring está acessível"""
+        client = await self._get_client()
+        try:
+            response = await client.get("/orcamentos/referencias/MINIMO")
+            return response.status_code < 500
+        except (httpx.ConnectError, httpx.TimeoutException):
+            return False
+
     # =========================================================================
     # ORÇAMENTO BASE
     # =========================================================================
 
     async def buscar_orcamento_base(self, padrao: str) -> Optional[Dict[str, Any]]:
         """
-        Busca orçamento base pelo padrão construtivo
+        Busca orçamento de referência pelo padrão construtivo
 
         Args:
             padrao: MINIMO ou BASICO
@@ -78,10 +87,14 @@ class SpringAPIClient:
         client = await self._get_client()
 
         try:
-            response = await client.get(f"/orcamentos/base/{padrao}")
+            response = await client.get(f"/orcamentos/referencias/{padrao}")
             response.raise_for_status()
             return response.json()
-        except httpx.HTTPStatusError:
+        except httpx.HTTPStatusError as e:
+            print(f"[SpringAPI] Erro ao buscar orçamento referência '{padrao}': {e.response.status_code}")
+            return None
+        except httpx.ConnectError:
+            print(f"[SpringAPI] Não foi possível conectar em {self.base_url}")
             return None
 
     async def buscar_etapas_por_orcamento(
@@ -112,12 +125,12 @@ class SpringAPIClient:
             itens = []
             for item_data in etapa_data.get('itens', []):
                 itens.append(ItemOrcamento(
-                    codigo=item_data.get('codigo', 0),
-                    nome=item_data.get('nome', ''),
-                    descricao=item_data.get('descricao', ''),
-                    quantidade=float(item_data.get('quantidade', 0)),
-                    unidade=item_data.get('unidade', ''),
-                    custo_unitario=float(item_data.get('custoUnitario', 0))
+                    codigo=item_data.get('codigo') or 0,
+                    nome=item_data.get('nome') or '',
+                    descricao=item_data.get('descricao') or '',
+                    quantidade=float(item_data.get('quantidade') or 0),
+                    unidade=item_data.get('unidade') or '',
+                    custo_unitario=float(item_data.get('custoUnitario') or 0)
                 ))
 
             etapas.append(EtapaOrcamento(
@@ -168,9 +181,9 @@ class SpringAPIClient:
             data = response.json()
 
             return PrecoComposicao(
-                codigo_composicao=str(data.get('codigoComposicao', '')),
-                custo_sem_desoneracao=float(data.get('custoSemDesoneracao', 0)),
-                custo_com_desoneracao=float(data.get('custoComDesoneracao', 0))
+                codigo_composicao=str(data.get('codigoComposicao') or ''),
+                custo_sem_desoneracao=float(data.get('custoSemDesoneracao') or 0),
+                custo_com_desoneracao=float(data.get('custoComDesoneracao') or 0)
             )
         except httpx.HTTPStatusError:
             return None

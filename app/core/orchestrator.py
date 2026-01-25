@@ -98,7 +98,7 @@ class BudgetOrchestrator:
         # =====================================================================
         yield EventoStream(
             etapa="load_base",
-            mensagem=f"Carregando orçamento base '{dados.padrao_construtivo}'...",
+            mensagem=f"Carregando orçamento de referência '{dados.padrao_construtivo}'...",
             progresso=0.25
         )
 
@@ -109,7 +109,7 @@ class BudgetOrchestrator:
         if not orcamento_base:
             yield EventoStream(
                 etapa="error",
-                mensagem=f"Orçamento base '{dados.padrao_construtivo}' não encontrado"
+                mensagem=f"Orçamento de referência '{dados.padrao_construtivo}' não encontrado. Verifique se existe um orçamento com esse padrão cadastrado na API."
             )
             return
 
@@ -479,6 +479,7 @@ class BudgetOrchestrator:
                 "baixa_confianca": resultado.estatisticas.baixa_confianca,
                 "taxa_sucesso": resultado.estatisticas.taxa_sucesso
             },
+            "erros": resultado.erros,
             "avisos": resultado.avisos,
             "codigo_orcamento_criado": resultado.codigo_orcamento_criado,
             "codigo_obra_criada": resultado.codigo_obra_criada,

@@ -5,6 +5,13 @@ Prompts centralizados para o LLM
 from datetime import datetime
 
 
+MESES_PT = {
+    1: "janeiro", 2: "fevereiro", 3: "março", 4: "abril",
+    5: "maio", 6: "junho", 7: "julho", 8: "agosto",
+    9: "setembro", 10: "outubro", 11: "novembro", 12: "dezembro"
+}
+
+
 def criar_prompt_extracao(texto_usuario: str) -> str:
     """
     Prompt otimizado para extração rápida e direta de informações do pedido
@@ -16,20 +23,23 @@ def criar_prompt_extracao(texto_usuario: str) -> str:
         Prompt formatado para o LLM
     """
     data_atual = datetime.now()
-    mes_atual = data_atual.strftime("%B")
+    mes_atual = MESES_PT[data_atual.month]
     ano_atual = data_atual.year
 
-    return f"""Extraia as informações e retorne APENAS o JSON. Não explique, não comente.
+    return f"""Extraia as informações do texto e retorne APENAS um JSON válido.
 
 Texto: "{texto_usuario}"
 
-Extrair:
-- quantidade (inteiro, padrão=1)
-- tipo_construtivo (ex: residencial)
-- padrao_construtivo (ex: minimo, basico)
-- estado (sigla UF ou nome)
-- mes_referencia (nome ou número do mês, padrão={mes_atual})
-- ano_referencia (ano com 4 dígitos, padrão={ano_atual})
+Campos a extrair:
+- quantidade: número inteiro (padrão: 1)
+- tipo_construtivo: tipo da construção (ex: "residencial")
+- padrao_construtivo: padrão (ex: "minimo", "basico")
+- estado: UF ou nome do estado brasileiro
+- mes_referencia: número do mês 1-12 (padrão: {data_atual.month})
+- ano_referencia: ano com 4 dígitos (padrão: {ano_atual})
+
+Exemplo de resposta:
+{{"quantidade": 2, "tipo_construtivo": "residencial", "padrao_construtivo": "minimo", "estado": "MA", "mes_referencia": 9, "ano_referencia": 2025}}
 
 JSON:"""
 

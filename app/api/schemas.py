@@ -2,7 +2,7 @@
 Schemas Pydantic para request/response da API
 """
 
-from typing import Optional, List, Any
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 
@@ -16,7 +16,10 @@ class BudgetRequest(BaseModel):
         ...,
         min_length=10,
         max_length=2000,
-        description="Texto descrevendo o orçamento desejado"
+        description="Texto descrevendo o orçamento desejado",
+        json_schema_extra={
+            "example": "Construir 2 casas residenciais padrão mínimo no Maranhão para janeiro de 2025"
+        }
     )
     provider: Optional[str] = Field(
         default=None,
@@ -24,7 +27,8 @@ class BudgetRequest(BaseModel):
     )
     nome_obra: Optional[str] = Field(
         default=None,
-        description="Nome da obra para persistir (opcional)"
+        description="Nome da obra para persistir (opcional)",
+        json_schema_extra={"example": "Residencial Popular MA"}
     )
 
 
@@ -83,6 +87,7 @@ class BudgetResponse(BaseModel):
     etapas: List[EtapaResponse] = []
     valor_total: float = 0.0
     estatisticas: Optional[EstatisticasResponse] = None
+    erros: List[str] = []
     avisos: List[str] = []
     codigo_orcamento_criado: Optional[int] = None
     codigo_obra_criada: Optional[int] = None
@@ -90,12 +95,17 @@ class BudgetResponse(BaseModel):
     provider_usado: Optional[str] = None
 
 
+class ComponentHealthResponse(BaseModel):
+    """Status de um componente"""
+    status: str
+    detalhes: Optional[str] = None
+
+
 class HealthResponse(BaseModel):
     """Status de saúde da aplicação"""
     status: str
+    components: Dict[str, ComponentHealthResponse]
     llm_providers: List[str]
-    database: str
-    spring_api: str
 
 
 class ProvidersResponse(BaseModel):

@@ -80,6 +80,15 @@ class OpenAIProvider(LLMProvider):
             tempo_resposta=tempo_resposta
         )
 
+    async def health_check(self) -> bool:
+        """Verifica se a API OpenAI está acessível"""
+        client = await self._get_client()
+        try:
+            response = await client.get("/models")
+            return response.status_code == 200
+        except (httpx.ConnectError, httpx.TimeoutException):
+            return False
+
     async def close(self) -> None:
         if self._client:
             await self._client.aclose()
