@@ -5,25 +5,19 @@ Rotas da API FastAPI
 import json
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from app.config import get_settings
 from app.llm import get_available_providers, get_llm_provider
-from app.core.orchestrator import BudgetOrchestrator
+from app.core.orchestrator import ConversationalOrchestrator
 from app.services.spring_client import get_spring_client
 from app.services.vector_search import check_database_connection
 from app.api.schemas import (
-    BudgetRequest,
-    BudgetResponse,
+    ConversationRequest,
     HealthResponse,
     ComponentHealthResponse,
-    ProvidersResponse,
-    ErrorResponse,
-    DadosExtraidosResponse,
-    EtapaResponse,
-    ItemResponse,
-    EstatisticasResponse
+    ProvidersResponse
 )
 
 
@@ -102,18 +96,84 @@ async def list_providers():
 
 
 @router.post("/budget/stream")
-async def generate_budget_stream(request: BudgetRequest):
+async def generate_budget_stream(request: ConversationRequest):
     """
-    Gera orçamento com streaming SSE
+    Gera orçamento com streaming SSE e fluxo conversacional inteligente.
 
-    Retorna Server-Sent Events com progresso em tempo real.
+    Este endpoint implementa um fluxo que:
+    1. Extrai informações do texto inicial
+    2. Pergunta dados faltantes um a um
+    3. Confirma valores padrão antes de usar
+    4. Mostra resumo para confirmação final
+    5. Processa o orçamento após confirmação
+
+    ## Uso:
+
+    ### Iniciar conversa (nova sessão):
+    ```json
+    {"mensagem": "quero construir uma casa"}
+    ```
+
+    ### Responder pergunta:
+    ```json
+    {
+        "session_id": "abc123",
+        "resposta": {"campo": "uf", "valor": "SP"}
+    }
+    ```
+
+    ### Confirmar defaults/resumo:
+    ```json
+    {
+        "session_id": "abc123",
+        "acao": "confirmar"
+    }
+    ```
+
+    ### Solicitar correção:
+    ```json
+    {
+        "session_id": "abc123",
+        "acao": "corrigir"
+    }
+    ```
+
+    ## Eventos SSE retornados:
+
+    - `session_created`: Nova sessão criada
+    - `session_resumed`: Sessão existente retomada
+    - `session_expired`: Sessão expirou
+    - `extraction_start`: Iniciando extração
+    - `extraction_partial`: Dados extraídos até o momento
+    - `question`: Pergunta ao usuário (aguarda resposta)
+    - `field_updated`: Campo atualizado com sucesso
+    - `confirm_defaults`: Solicita confirmação de valores padrão
+    - `confirm_summary`: Solicita confirmação do resumo final
+    - `user_confirmed`: Usuário confirmou, processando
+    - `correction_needed`: Usuário quer corrigir
+    - Eventos de processamento (load_base, search, pricing, etc.)
+    - `complete`: Orçamento finalizado
+    - `error`: Erro no processamento
     """
     async def event_generator() -> AsyncGenerator[str, None]:
         try:
-            orchestrator = BudgetOrchestrator(provider_name=request.provider)
+            orchestrator = ConversationalOrchestrator(
+                provider_name=request.provider
+            )
+
+            # Preparar resposta de campo se houver
+            resposta_campo = None
+            if request.resposta:
+                resposta_campo = {
+                    "campo": request.resposta.campo,
+                    "valor": request.resposta.valor
+                }
 
             async for evento in orchestrator.process_stream(
                 texto_usuario=request.mensagem,
+                session_id=request.session_id,
+                resposta_campo=resposta_campo,
+                confirmacao=request.acao,
                 nome_obra=request.nome_obra
             ):
                 # Formato SSE
@@ -138,79 +198,3 @@ async def generate_budget_stream(request: BudgetRequest):
     )
 
 
-@router.post("/budget", response_model=BudgetResponse)
-async def generate_budget(request: BudgetRequest):
-    """
-    Gera orçamento (sem streaming)
-
-    Retorna resultado completo após processamento.
-    """
-    try:
-        orchestrator = BudgetOrchestrator(provider_name=request.provider)
-
-        resultado_final = None
-
-        async for evento in orchestrator.process_stream(
-            texto_usuario=request.mensagem,
-            nome_obra=request.nome_obra
-        ):
-            # Capturar último evento (complete ou error)
-            if evento.etapa == "complete":
-                resultado_final = evento.dados
-            elif evento.etapa == "error":
-                raise HTTPException(
-                    status_code=400,
-                    detail=evento.mensagem
-                )
-
-        if not resultado_final:
-            raise HTTPException(
-                status_code=500,
-                detail="Processamento não retornou resultado"
-            )
-
-        # Converter para response model
-        dados_extraidos = None
-        if resultado_final.get("dados_extraidos"):
-            dados_extraidos = DadosExtraidosResponse(
-                **resultado_final["dados_extraidos"]
-            )
-
-        etapas = []
-        for etapa_data in resultado_final.get("etapas", []):
-            itens = [
-                ItemResponse(**item)
-                for item in etapa_data.get("itens", [])
-            ]
-            etapas.append(EtapaResponse(
-                nome=etapa_data["nome"],
-                itens=itens,
-                valor_total=etapa_data["valor_total"]
-            ))
-
-        estatisticas = None
-        if resultado_final.get("estatisticas"):
-            estatisticas = EstatisticasResponse(
-                **resultado_final["estatisticas"]
-            )
-
-        return BudgetResponse(
-            sucesso=resultado_final["sucesso"],
-            dados_extraidos=dados_extraidos,
-            etapas=etapas,
-            valor_total=resultado_final["valor_total"],
-            estatisticas=estatisticas,
-            erros=resultado_final.get("erros", []),
-            avisos=resultado_final.get("avisos", []),
-            codigo_orcamento_criado=resultado_final.get("codigo_orcamento_criado"),
-            codigo_obra_criada=resultado_final.get("codigo_obra_criada"),
-            tempo_processamento=resultado_final.get("tempo_processamento", 0),
-            provider_usado=orchestrator.provider_name
-        )
-
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))

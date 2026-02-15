@@ -1,14 +1,23 @@
 # ObradorIA Agent
 
-Sistema inteligente para geração automática de orçamentos de construção civil utilizando IA/LLM e busca semântica na base SINAPI.
+Sistema inteligente para geração automática de orçamentos de construção civil utilizando IA/LLM e busca de preços na base SINAPI.
 
 ## Funcionalidades
 
 - Extração de informações de orçamento a partir de linguagem natural
-- Busca semântica de composições SINAPI via embeddings (pgvector)
+- **Geração autônoma de estrutura via LLM com Chain-of-Thought** (não depende de orçamento base)
+- Busca de composições SINAPI via embeddings (pgvector)
 - Precificação automática por estado e data de referência
 - Streaming de progresso em tempo real (SSE)
 - Suporte a múltiplos providers LLM (Ollama, OpenAI, Anthropic)
+
+## Arquitetura de IA
+
+O sistema utiliza técnicas avançadas de IA:
+
+1. **Chain-of-Thought Prompting**: O LLM raciocina passo a passo para gerar estruturas de orçamento realistas
+2. **Busca Aprimorada**: Embeddings vetoriais para matching inteligente de composições SINAPI
+3. **Fallback Inteligente**: Se não houver orçamento base na API, gera estrutura automaticamente via LLM
 
 ## Estrutura do Projeto
 
@@ -22,11 +31,12 @@ obradoria-agent/
     │   ├── routes.py       # Endpoints REST
     │   └── schemas.py      # Modelos Pydantic (request/response)
     ├── core/
-    │   ├── models.py       # Modelos de domínio
-    │   ├── orchestrator.py # Orquestrador de geração de orçamento
-    │   ├── extractor.py    # Extração de dados via LLM
-    │   ├── prompts.py      # Prompts do sistema
-    │   └── validators.py   # Validação e normalização
+    │   ├── models.py           # Modelos de domínio
+    │   ├── orchestrator.py     # Orquestrador de geração de orçamento
+    │   ├── extractor.py        # Extração de dados via LLM
+    │   ├── budget_generator.py # Geração de estrutura via CoT
+    │   ├── prompts.py          # Prompts do sistema
+    │   └── validators.py       # Validação e normalização
     ├── llm/
     │   ├── base.py         # Interface abstrata LLM
     │   ├── ollama.py       # Provider Ollama (local)
@@ -42,7 +52,7 @@ obradoria-agent/
 - Python 3.11+
 - PostgreSQL com extensão pgvector
 - Ollama (ou chave OpenAI/Anthropic)
-- API Spring Boot do Obradoria rodando
+- API Spring Boot do Obradoria (opcional - para orçamentos base e persistência)
 
 ## Instalação
 

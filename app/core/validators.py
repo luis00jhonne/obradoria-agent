@@ -64,16 +64,33 @@ def validar_padrao(padrao_input: str) -> Tuple[Optional[str], float]:
 
 def validar_tipo(tipo_input: str) -> Tuple[Optional[str], float]:
     """
-    Valida e normaliza tipo construtivo
+    Valida e normaliza tipo construtivo (subtipos residenciais)
 
     Returns:
         Tuple[tipo_valido, confianca]
+        - tipo_valido: RESIDENCIAL_CASA, RESIDENCIAL_APARTAMENTO, RESIDENCIAL_SOBRADO, RESIDENCIAL_KITNET
+        - confianca: 0.0 a 1.0
     """
     if not tipo_input:
         return None, 0.0
 
     tipo_norm = normalizar_texto(tipo_input.strip())
 
+    # Mapeamento direto de nomes amigáveis para tipos internos
+    mapeamento_direto = {
+        'CASA': 'RESIDENCIAL_CASA',
+        'APARTAMENTO': 'RESIDENCIAL_APARTAMENTO',
+        'SOBRADO': 'RESIDENCIAL_SOBRADO',
+        'KITNET': 'RESIDENCIAL_KITNET',
+        'KITINETE': 'RESIDENCIAL_KITNET',
+        'STUDIO': 'RESIDENCIAL_KITNET',
+    }
+
+    # Verificar mapeamento direto primeiro
+    if tipo_norm in mapeamento_direto:
+        return mapeamento_direto[tipo_norm], 1.0
+
+    # Buscar no TIPO_MAPPING completo
     for tipo_oficial, sinonimos in TIPO_MAPPING.items():
         for sinonimo in sinonimos:
             sinonimo_norm = normalizar_texto(sinonimo)
@@ -81,6 +98,17 @@ def validar_tipo(tipo_input: str) -> Tuple[Optional[str], float]:
                 return tipo_oficial, 1.0
 
     return None, 0.0
+
+
+def obter_tipos_disponiveis() -> list:
+    """
+    Retorna lista de tipos residenciais disponíveis para exibição ao usuário.
+
+    Returns:
+        Lista com nomes amigáveis dos tipos disponíveis
+    """
+    from app.config import TIPOS_RESIDENCIAIS_DISPONIVEIS
+    return TIPOS_RESIDENCIAIS_DISPONIVEIS
 
 
 def validar_mes(mes_input) -> Optional[int]:

@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     # Ollama (Local)
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.1:8b"
-    ollama_timeout: int = 120
+    ollama_timeout: int = 300  # 5 minutos para CoT
 
     # OpenAI
     openai_api_key: str = ""
@@ -86,16 +86,41 @@ UF_MAPPING = {
 
 PADRAO_MAPPING = {
     'MINIMO': ['minimo', 'mínimo', 'simples', 'economico', 'econômico', 'popular', 'baixo'],
-    'BASICO': ['basico', 'básico', 'intermediario', 'intermediário', 'padrao', 'padrão', 'medio', 'médio']
+    'BASICO': ['basico', 'básico', 'intermediario', 'intermediário', 'padrao', 'padrão', 'medio', 'médio'],
+    'ALTO': ['alto', 'luxo', 'premium', 'superior', 'fino', 'nobre']
 }
 
 TIPO_MAPPING = {
-    'RESIDENCIAL': [
-        'residencial', 'residencias', 'residências', 'casas',
-        'unidades habitacionais', 'moradias', 'habitacoes',
-        'habitações', 'unidades', 'casas populares', 'casa'
+    'RESIDENCIAL_CASA': [
+        'casa', 'casas', 'residencia', 'residência', 'residencias',
+        'residências', 'moradia', 'moradias', 'habitacao', 'habitação',
+        'habitacoes', 'habitações', 'casas populares', 'unidades habitacionais'
+    ],
+    'RESIDENCIAL_APARTAMENTO': [
+        'apartamento', 'apartamentos', 'apto', 'aptos', 'apt',
+        'unidade habitacional', 'flat', 'flats'
+    ],
+    'RESIDENCIAL_SOBRADO': [
+        'sobrado', 'sobrados', 'casa de dois andares', 'casa duplex',
+        'duplex', 'casa dois pavimentos'
+    ],
+    'RESIDENCIAL_KITNET': [
+        'kitnet', 'kitnets', 'kitinete', 'kitinetes', 'quitinete',
+        'quitinetes', 'studio', 'studios', 'conjugado', 'conjugados'
     ]
 }
+
+# Tipos não suportados - para aviso ao usuário
+TIPOS_NAO_SUPORTADOS = {
+    'ESPORTIVO': ['quadra', 'ginasio', 'ginásio', 'campo', 'piscina', 'academia', 'esporte'],
+    'COMERCIAL': ['loja', 'galpao', 'galpão', 'escritorio', 'escritório', 'comercial', 'shopping'],
+    'INDUSTRIAL': ['fabrica', 'fábrica', 'industria', 'indústria', 'barracao', 'barracão', 'armazem', 'armazém'],
+    'INFRAESTRUTURA': ['ponte', 'estrada', 'viaduto', 'tunel', 'túnel', 'rodovia', 'ferrovia'],
+    'INSTITUCIONAL': ['escola', 'hospital', 'igreja', 'predio publico', 'prédio público', 'prefeitura', 'forum', 'fórum']
+}
+
+# Lista de tipos residenciais disponíveis (para exibir ao usuário)
+TIPOS_RESIDENCIAIS_DISPONIVEIS = ['Casa', 'Apartamento', 'Sobrado', 'Kitnet']
 
 MESES_MAPPING = {
     'JANEIRO': 1, 'JAN': 1,
