@@ -2,6 +2,7 @@
 Serviço de busca vetorial com pgvector
 """
 
+import asyncio
 from typing import Optional, List
 import asyncpg
 from sentence_transformers import SentenceTransformer
@@ -98,8 +99,8 @@ class VectorSearchService:
         if limite_similaridade is None:
             limite_similaridade = self.settings.limite_minimo_busca
 
-        # Gerar embedding
-        embedding = self._gerar_embedding(texto_busca)
+        # Gerar embedding em thread para nao bloquear o event loop
+        embedding = await asyncio.to_thread(self._gerar_embedding, texto_busca)
         embedding_str = '[' + ','.join(map(str, embedding)) + ']'
 
         query = """

@@ -5,7 +5,16 @@ LLM module - Provider abstractions
 from typing import Dict, Optional
 
 from app.config import get_settings
-from app.llm.base import LLMProvider, LLMResponse
+from app.llm.base import (
+    LLMProvider,
+    LLMResponse,
+    ToolParameter,
+    ToolDefinition,
+    ToolCall,
+    ToolResult,
+    StopReason,
+    LLMResponseWithTools,
+)
 from app.llm.ollama import OllamaProvider
 from app.llm.openai import OpenAIProvider
 from app.llm.anthropic import AnthropicProvider
@@ -21,10 +30,10 @@ def get_llm_provider(provider_name: Optional[str] = None) -> LLMProvider:
 
     Args:
         provider_name: Nome do provider (ollama, openai, anthropic)
-                      Se None, usa o padrão configurado
+                      Se None, usa o padrao configurado
 
     Returns:
-        Instância do provider solicitado
+        Instancia do provider solicitado
     """
     settings = get_settings()
 
@@ -33,11 +42,9 @@ def get_llm_provider(provider_name: Optional[str] = None) -> LLMProvider:
 
     provider_name = provider_name.lower()
 
-    # Retornar do cache se já existe
     if provider_name in _providers:
         return _providers[provider_name]
 
-    # Criar nova instância
     if provider_name == "ollama":
         provider = OllamaProvider()
     elif provider_name == "openai":
@@ -53,10 +60,10 @@ def get_llm_provider(provider_name: Optional[str] = None) -> LLMProvider:
 
 def get_available_providers() -> list[str]:
     """
-    Retorna lista de providers disponíveis (com credenciais configuradas)
+    Retorna lista de providers disponiveis (com credenciais configuradas)
     """
     settings = get_settings()
-    available = ["ollama"]  # Ollama sempre disponível (local)
+    available = ["ollama"]  # Ollama sempre disponivel (local)
 
     if settings.openai_api_key:
         available.append("openai")
@@ -77,10 +84,16 @@ async def close_all_providers() -> None:
 __all__ = [
     "LLMProvider",
     "LLMResponse",
+    "ToolParameter",
+    "ToolDefinition",
+    "ToolCall",
+    "ToolResult",
+    "StopReason",
+    "LLMResponseWithTools",
     "OllamaProvider",
     "OpenAIProvider",
     "AnthropicProvider",
     "get_llm_provider",
     "get_available_providers",
-    "close_all_providers"
+    "close_all_providers",
 ]

@@ -3,7 +3,8 @@ Rotas da API FastAPI
 """
 
 import json
-from typing import AsyncGenerator
+import uuid
+from typing import AsyncGenerator, Dict, List, Any
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -11,14 +12,20 @@ from fastapi.responses import StreamingResponse
 from app.config import get_settings
 from app.llm import get_available_providers, get_llm_provider
 from app.core.orchestrator import ConversationalOrchestrator
+from app.core.agent import BudgetAgent
 from app.services.spring_client import get_spring_client
 from app.services.vector_search import check_database_connection
 from app.api.schemas import (
     ConversationRequest,
+    AgentRequest,
     HealthResponse,
     ComponentHealthResponse,
     ProvidersResponse
 )
+
+
+# Sessoes em memoria para o agent (session_id -> historico de mensagens)
+_agent_sessions: Dict[str, List[Dict[str, Any]]] = {}
 
 
 router = APIRouter()
@@ -197,4 +204,89 @@ async def generate_budget_stream(request: ConversationRequest):
         }
     )
 
+
+@router.post("/agent/stream")
+async def agent_stream(request: AgentRequest):
+    """
+    Gera orçamento usando agent-based architecture com tool use.
+
+    O LLM decide quais tools chamar e em que ordem, conversando
+    naturalmente com o usuário. Suporta multi-turno via session_id.
+
+    ## Uso:
+
+    ### Nova conversa:
+    ```json
+    {"mensagem": "quero construir 2 casas padrao minimo no Maranhao jan/2025"}
+    ```
+
+    ### Continuar conversa:
+    ```json
+    {
+        "mensagem": "use padrao basico em vez de minimo",
+        "session_id": "uuid-da-sessao"
+    }
+    ```
+
+    ## Eventos SSE retornados:
+
+    - `load_base` / `load_base_done`: Buscando estrutura de referencia
+    - `search` / `search_done`: Buscando composicoes SINAPI
+    - `pricing` / `pricing_done`: Buscando precos
+    - `persist` / `persist_done`: Salvando orcamento
+    - `synthesize`: Texto parcial do agente
+    - `complete`: Resposta final do agente
+    - `error`: Erro no processamento
+    """
+    async def event_generator() -> AsyncGenerator[str, None]:
+        try:
+            # Gerenciar sessao
+            session_id = request.session_id
+            if session_id and session_id in _agent_sessions:
+                historico = _agent_sessions[session_id]
+            else:
+                session_id = session_id or str(uuid.uuid4())
+                historico = []
+                _agent_sessions[session_id] = historico
+
+            # Emitir session_id
+            session_data = json.dumps({
+                "etapa": "session_created",
+                "mensagem": "Sessao iniciada",
+                "dados": {"session_id": session_id}
+            }, ensure_ascii=False)
+            yield f"event: session_created\ndata: {session_data}\n\n"
+
+            agent = BudgetAgent(provider_name=request.provider)
+
+            async for evento in agent.process_stream(
+                mensagem_usuario=request.mensagem,
+                historico=historico,
+            ):
+                data = json.dumps(evento.to_dict(), ensure_ascii=False)
+                yield f"event: {evento.etapa}\ndata: {data}\n\n"
+
+                # Atualizar historico da sessao com as mensagens acumuladas
+                # O agent acumula mensagens internamente; salvamos o estado final
+                if evento.etapa == "complete" and evento.dados:
+                    # Salvar mensagem do usuario e resposta no historico
+                    historico.append({"role": "user", "content": request.mensagem})
+                    historico.append({"role": "assistant", "content": evento.mensagem})
+
+        except Exception as e:
+            error_data = json.dumps({
+                "etapa": "error",
+                "mensagem": str(e)
+            }, ensure_ascii=False)
+            yield f"event: error\ndata: {error_data}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 

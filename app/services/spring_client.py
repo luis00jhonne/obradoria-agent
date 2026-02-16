@@ -2,12 +2,15 @@
 Cliente HTTP assíncrono para API Spring Boot
 """
 
+import logging
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
 
 import httpx
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -203,7 +206,8 @@ class SpringAPIClient:
             )
             response.raise_for_status()
             return response.json()
-        except httpx.HTTPStatusError:
+        except httpx.HTTPStatusError as e:
+            logger.error(f"[SpringAPI] Erro ao criar obra '{nome}': {e.response.status_code} - {e.response.text}")
             return None
 
     async def criar_orcamento(
@@ -231,7 +235,8 @@ class SpringAPIClient:
             response = await client.post("/orcamentos", json=payload)
             response.raise_for_status()
             return response.json()
-        except httpx.HTTPStatusError:
+        except httpx.HTTPStatusError as e:
+            logger.error(f"[SpringAPI] Erro ao criar orcamento '{nome}': {e.response.status_code} - {e.response.text}")
             return None
 
     async def criar_etapa_orcamento(
@@ -253,7 +258,8 @@ class SpringAPIClient:
             response = await client.post("/etapas-orcamento", json=payload)
             response.raise_for_status()
             return response.json()
-        except httpx.HTTPStatusError:
+        except httpx.HTTPStatusError as e:
+            logger.error(f"[SpringAPI] Erro ao criar etapa '{nome}': {e.response.status_code} - {e.response.text}")
             return None
 
     async def adicionar_itens_etapa(
@@ -280,7 +286,8 @@ class SpringAPIClient:
             )
             response.raise_for_status()
             return True
-        except httpx.HTTPStatusError:
+        except httpx.HTTPStatusError as e:
+            logger.error(f"[SpringAPI] Erro ao adicionar itens na etapa {codigo_etapa}: {e.response.status_code} - {e.response.text}")
             return False
 
 

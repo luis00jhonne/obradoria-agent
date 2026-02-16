@@ -32,6 +32,27 @@ class BudgetRequest(BaseModel):
     )
 
 
+class AgentRequest(BaseModel):
+    """Request para o endpoint agent-based com tool use"""
+    mensagem: str = Field(
+        ...,
+        min_length=1,
+        max_length=5000,
+        description="Mensagem do usuario",
+        json_schema_extra={
+            "example": "Quero construir 2 casas padrao minimo no Maranhao para janeiro de 2025"
+        }
+    )
+    session_id: Optional[str] = Field(
+        default=None,
+        description="ID da sessao para conversas multi-turno"
+    )
+    provider: Optional[str] = Field(
+        default=None,
+        description="Provider LLM a usar (ollama, openai, anthropic)"
+    )
+
+
 class RespostaCampo(BaseModel):
     """Resposta a uma pergunta sobre um campo específico"""
     campo: str = Field(

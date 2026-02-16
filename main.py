@@ -57,7 +57,6 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:4200",  # Angular
         "http://localhost:8891",  # Spring Boot
-        "http://localhost:3000",  # React
     ],
     allow_credentials=True,
     allow_methods=["*"],

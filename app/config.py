@@ -2,9 +2,12 @@
 Configurações centralizadas do ObradorIA Agent
 """
 
-from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 from pydantic_settings import BaseSettings
+
+# Raiz do projeto (um nivel acima de app/)
+_BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
@@ -37,7 +40,7 @@ class Settings(BaseSettings):
 
     # Anthropic
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-3-5-sonnet-20241022"
+    anthropic_model: str = "claude-haiku-4-5-20251001"
     anthropic_timeout: int = 60
 
     # Embeddings
@@ -53,13 +56,12 @@ class Settings(BaseSettings):
     default_llm_provider: Literal["ollama", "openai", "anthropic"] = "ollama"
 
     class Config:
-        env_file = ".env"
+        env_file = str(_BASE_DIR / ".env")
         env_file_encoding = "utf-8"
 
 
-@lru_cache
 def get_settings() -> Settings:
-    """Retorna instância singleton das configurações"""
+    """Retorna instância das configurações"""
     return Settings()
 
 

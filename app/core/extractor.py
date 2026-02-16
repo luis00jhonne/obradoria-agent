@@ -5,6 +5,7 @@ Extração de informações do texto usando LLM
 import json
 import re
 import logging
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, List, Dict, Any
@@ -56,7 +57,7 @@ def extrair_por_regras(texto: str) -> Dict[str, Any]:
     )
 
     texto_upper = texto.upper()
-    texto_norm = re.sub(r'[^\w\s]', ' ', texto_upper)
+    texto_sem_acento = unicodedata.normalize('NFKD', texto_upper).encode('ASCII', 'ignore').decode('ASCII')
     resultado = {}
 
     # Extrair quantidade (números antes de palavras-chave)
@@ -71,12 +72,20 @@ def extrair_por_regras(texto: str) -> Dict[str, Any]:
             resultado['quantidade'] = int(match.group(1))
             break
 
-    # Extrair UF (siglas ou nomes de estados)
-    for nome, uf in UF_MAPPING.items():
-        # Buscar como palavra completa
-        if re.search(rf'\b{re.escape(nome)}\b', texto_upper):
+    # Extrair UF: nomes completos primeiro, depois siglas (evita falsos positivos)
+    nomes_completos = {k: v for k, v in UF_MAPPING.items() if len(k) > 2}
+    siglas = {k: v for k, v in UF_MAPPING.items() if len(k) == 2}
+
+    for nome, uf in nomes_completos.items():
+        if re.search(rf'\b{re.escape(nome)}\b', texto_sem_acento):
             resultado['estado'] = uf
             break
+
+    if 'estado' not in resultado:
+        for nome, uf in siglas.items():
+            if re.search(rf'\b{re.escape(nome)}\b', texto_sem_acento):
+                resultado['estado'] = uf
+                break
 
     # Verificar tipos NÃO SUPORTADOS primeiro
     tipo_nao_suportado_detectado = None
