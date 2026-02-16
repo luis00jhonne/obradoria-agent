@@ -16,5 +16,8 @@ sentence-transformers>=2.2.0
 torch>=2.1.0
 numpy>=1.26.0
 
+# Autenticação
+PyJWT>=2.8.0
+
 # Utilitários
 python-dotenv>=1.0.0

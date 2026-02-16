@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 _semaphore = asyncio.Semaphore(5)
 
 # Armazena os dados processados do ultimo orcamento para uso no salvamento
-_ultimo_orcamento_processado: Optional[List[Dict[str, Any]]] = None
+_ultimo_orcamento_processado: Optional[Dict[str, Any]] = None
 
 
 # =============================================================================
@@ -87,9 +87,9 @@ TOOL_PROCESSAR_ITENS_ORCAMENTO = ToolDefinition(
 TOOL_SALVAR_ORCAMENTO = ToolDefinition(
     name="salvar_orcamento",
     description=(
-        "Salva o orcamento finalizado no sistema. Usa automaticamente os dados das etapas e itens "
-        "que foram processados pela tool processar_itens_orcamento. "
-        "Voce so precisa informar nome_obra e descricao. "
+        "Salva o orcamento finalizado no sistema. Usa automaticamente os dados das etapas, itens, "
+        "estado e periodo de referencia que foram processados pela tool processar_itens_orcamento. "
+        "Voce so precisa informar nome_obra, descricao e padrao_construtivo. "
         "Use somente quando o usuario confirmar que deseja salvar."
     ),
     parameters=[
@@ -104,6 +104,13 @@ TOOL_SALVAR_ORCAMENTO = ToolDefinition(
             type="string",
             description="Descricao da obra",
             required=True
+        ),
+        ToolParameter(
+            name="padrao_construtivo",
+            type="string",
+            description="Padrao construtivo da obra",
+            required=True,
+            enum=["MINIMO", "BASICO", "MEDIO", "ALTO", "PERSONALIZADO"]
         )
     ]
 )
@@ -237,11 +244,17 @@ async def handle_processar_itens_orcamento(arguments: Dict[str, Any]) -> str:
         })
 
     # Armazenar dados estruturados para uso no salvamento
-    _ultimo_orcamento_processado = [
+    etapas_list = [
         {"nome": etapa_nome, "descricao": f"Etapa: {etapa_nome}", "itens": itens_list}
         for etapa_nome, itens_list in etapas_dados.items()
     ]
-    logger.info(f"[Tools] Dados armazenados: {len(_ultimo_orcamento_processado)} etapas para salvamento")
+    _ultimo_orcamento_processado = {
+        "etapas": etapas_list,
+        "uf": uf,
+        "mes": mes,
+        "ano": ano,
+    }
+    logger.info(f"[Tools] Dados armazenados: {len(etapas_list)} etapas para salvamento ({uf} {mes}/{ano})")
 
     # Saida compacta para o LLM
     output_lines = [f"Processados {len(itens)} itens para {uf} {mes}/{ano}:\n"]
@@ -260,12 +273,19 @@ async def handle_salvar_orcamento(arguments: Dict[str, Any]) -> str:
 
     nome_obra = arguments.get("nome_obra", "Obra sem nome")
     descricao = arguments.get("descricao", "")
-    etapas_data = _ultimo_orcamento_processado
+    padrao = arguments.get("padrao_construtivo", "PERSONALIZADO")
+    dados = _ultimo_orcamento_processado
 
-    logger.info(f"[Tools] salvar_orcamento: nome='{nome_obra}', etapas armazenadas={len(etapas_data) if etapas_data else 0}")
+    logger.info(f"[Tools] salvar_orcamento: nome='{nome_obra}', padrao={padrao}, dados={bool(dados)}")
 
-    if not etapas_data:
+    if not dados:
         return "Erro: nenhum orcamento processado. Execute processar_itens_orcamento antes de salvar."
+
+    etapas_data = dados["etapas"]
+    uf = dados["uf"]
+    mes = dados["mes"]
+    ano = dados["ano"]
+    mes_ano_referencia = f"{mes:02d}/{ano}"
 
     spring = get_spring_client()
 
@@ -281,7 +301,10 @@ async def handle_salvar_orcamento(arguments: Dict[str, Any]) -> str:
     orcamento = await spring.criar_orcamento(
         nome=f"Orcamento - {nome_obra}",
         descricao=descricao,
-        codigo_obra=codigo_obra
+        codigo_obra=codigo_obra,
+        estado=uf,
+        mes_ano_referencia=mes_ano_referencia,
+        padrao_construtivo=padrao,
     )
     if not orcamento:
         return "Erro: falha ao criar orcamento"

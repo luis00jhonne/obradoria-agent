@@ -9,6 +9,7 @@ from typing import Optional, List, Dict, Any
 import httpx
 
 from app.config import get_settings
+from app.api.context import request_token, request_model
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,13 @@ class SpringAPIClient:
             )
         return self._client
 
+    def _auth_headers(self) -> Dict[str, str]:
+        """Retorna headers com Authorization Bearer se disponível no contexto"""
+        token = request_token.get("")
+        if token:
+            return {"Authorization": f"Bearer {token}"}
+        return {}
+
     async def close(self) -> None:
         """Fecha conexão"""
         if self._client:
@@ -68,7 +76,7 @@ class SpringAPIClient:
         """Verifica se a API Spring está acessível"""
         client = await self._get_client()
         try:
-            response = await client.get("/orcamentos/referencias/MINIMO")
+            response = await client.get("/orcamentos/referencias/MINIMO", headers=self._auth_headers())
             return response.status_code < 500
         except (httpx.ConnectError, httpx.TimeoutException):
             return False
@@ -90,7 +98,7 @@ class SpringAPIClient:
         client = await self._get_client()
 
         try:
-            response = await client.get(f"/orcamentos/referencias/{padrao}")
+            response = await client.get(f"/orcamentos/referencias/{padrao}", headers=self._auth_headers())
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as e:
@@ -117,7 +125,8 @@ class SpringAPIClient:
 
         response = await client.get(
             "/etapas-orcamento",
-            params={"codigoOrcamento": codigo_orcamento}
+            params={"codigoOrcamento": codigo_orcamento},
+            headers=self._auth_headers()
         )
         response.raise_for_status()
 
@@ -178,7 +187,8 @@ class SpringAPIClient:
                     "uf": uf,
                     "mes": mes,
                     "ano": ano
-                }
+                },
+                headers=self._auth_headers()
             )
             response.raise_for_status()
             data = response.json()
@@ -202,7 +212,8 @@ class SpringAPIClient:
         try:
             response = await client.post(
                 "/obras",
-                json={"nome": nome, "descricao": descricao}
+                json={"nome": nome, "descricao": descricao},
+                headers=self._auth_headers()
             )
             response.raise_for_status()
             return response.json()
@@ -216,7 +227,10 @@ class SpringAPIClient:
         descricao: str,
         codigo_obra: Optional[int] = None,
         percentual_bdi: float = 0,
-        percentual_desconto: float = 0
+        percentual_desconto: float = 0,
+        estado: str = "",
+        mes_ano_referencia: str = "",
+        padrao_construtivo: str = "",
     ) -> Optional[Dict[str, Any]]:
         """Cria um novo orçamento"""
         client = await self._get_client()
@@ -230,9 +244,19 @@ class SpringAPIClient:
 
         if codigo_obra:
             payload["codigoObra"] = codigo_obra
+        if estado:
+            payload["estado"] = estado
+        if mes_ano_referencia:
+            payload["mesAnoReferencia"] = mes_ano_referencia
+        if padrao_construtivo:
+            payload["padraoConstrutivo"] = padrao_construtivo
+
+        modelo = request_model.get("")
+        if modelo:
+            payload["modelo"] = modelo
 
         try:
-            response = await client.post("/orcamentos", json=payload)
+            response = await client.post("/orcamentos", json=payload, headers=self._auth_headers())
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as e:
@@ -255,7 +279,7 @@ class SpringAPIClient:
         }
 
         try:
-            response = await client.post("/etapas-orcamento", json=payload)
+            response = await client.post("/etapas-orcamento", json=payload, headers=self._auth_headers())
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as e:
@@ -282,7 +306,8 @@ class SpringAPIClient:
         try:
             response = await client.post(
                 f"/etapas-orcamento/{codigo_etapa}/itens",
-                json=itens
+                json=itens,
+                headers=self._auth_headers()
             )
             response.raise_for_status()
             return True

@@ -6,17 +6,17 @@ import json
 import uuid
 from typing import AsyncGenerator, Dict, List, Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from app.config import get_settings
 from app.llm import get_available_providers, get_llm_provider
-from app.core.orchestrator import ConversationalOrchestrator
 from app.core.agent import BudgetAgent
 from app.services.spring_client import get_spring_client
 from app.services.vector_search import check_database_connection
+from app.api.auth import verify_token
+from app.api.context import request_token, request_model
 from app.api.schemas import (
-    ConversationRequest,
     AgentRequest,
     HealthResponse,
     ComponentHealthResponse,
@@ -91,7 +91,7 @@ async def health_check():
 
 
 @router.get("/providers", response_model=ProvidersResponse)
-async def list_providers():
+async def list_providers(token_payload: dict = Depends(verify_token)):
     """Lista providers LLM disponíveis"""
     settings = get_settings()
     providers = get_available_providers()
@@ -102,111 +102,8 @@ async def list_providers():
     )
 
 
-@router.post("/budget/stream")
-async def generate_budget_stream(request: ConversationRequest):
-    """
-    Gera orçamento com streaming SSE e fluxo conversacional inteligente.
-
-    Este endpoint implementa um fluxo que:
-    1. Extrai informações do texto inicial
-    2. Pergunta dados faltantes um a um
-    3. Confirma valores padrão antes de usar
-    4. Mostra resumo para confirmação final
-    5. Processa o orçamento após confirmação
-
-    ## Uso:
-
-    ### Iniciar conversa (nova sessão):
-    ```json
-    {"mensagem": "quero construir uma casa"}
-    ```
-
-    ### Responder pergunta:
-    ```json
-    {
-        "session_id": "abc123",
-        "resposta": {"campo": "uf", "valor": "SP"}
-    }
-    ```
-
-    ### Confirmar defaults/resumo:
-    ```json
-    {
-        "session_id": "abc123",
-        "acao": "confirmar"
-    }
-    ```
-
-    ### Solicitar correção:
-    ```json
-    {
-        "session_id": "abc123",
-        "acao": "corrigir"
-    }
-    ```
-
-    ## Eventos SSE retornados:
-
-    - `session_created`: Nova sessão criada
-    - `session_resumed`: Sessão existente retomada
-    - `session_expired`: Sessão expirou
-    - `extraction_start`: Iniciando extração
-    - `extraction_partial`: Dados extraídos até o momento
-    - `question`: Pergunta ao usuário (aguarda resposta)
-    - `field_updated`: Campo atualizado com sucesso
-    - `confirm_defaults`: Solicita confirmação de valores padrão
-    - `confirm_summary`: Solicita confirmação do resumo final
-    - `user_confirmed`: Usuário confirmou, processando
-    - `correction_needed`: Usuário quer corrigir
-    - Eventos de processamento (load_base, search, pricing, etc.)
-    - `complete`: Orçamento finalizado
-    - `error`: Erro no processamento
-    """
-    async def event_generator() -> AsyncGenerator[str, None]:
-        try:
-            orchestrator = ConversationalOrchestrator(
-                provider_name=request.provider
-            )
-
-            # Preparar resposta de campo se houver
-            resposta_campo = None
-            if request.resposta:
-                resposta_campo = {
-                    "campo": request.resposta.campo,
-                    "valor": request.resposta.valor
-                }
-
-            async for evento in orchestrator.process_stream(
-                texto_usuario=request.mensagem,
-                session_id=request.session_id,
-                resposta_campo=resposta_campo,
-                confirmacao=request.acao,
-                nome_obra=request.nome_obra
-            ):
-                # Formato SSE
-                data = json.dumps(evento.to_dict(), ensure_ascii=False)
-                yield f"event: {evento.etapa}\ndata: {data}\n\n"
-
-        except Exception as e:
-            error_data = json.dumps({
-                "etapa": "error",
-                "mensagem": str(e)
-            }, ensure_ascii=False)
-            yield f"event: error\ndata: {error_data}\n\n"
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
-        }
-    )
-
-
 @router.post("/agent/stream")
-async def agent_stream(request: AgentRequest):
+async def agent_stream(request: AgentRequest, token_payload: dict = Depends(verify_token)):
     """
     Gera orçamento usando agent-based architecture com tool use.
 
@@ -232,9 +129,8 @@ async def agent_stream(request: AgentRequest):
 
     - `load_base` / `load_base_done`: Buscando estrutura de referencia
     - `search` / `search_done`: Buscando composicoes SINAPI
-    - `pricing` / `pricing_done`: Buscando precos
     - `persist` / `persist_done`: Salvando orcamento
-    - `synthesize`: Texto parcial do agente
+    - `message`: Texto parcial do agente
     - `complete`: Resposta final do agente
     - `error`: Erro no processamento
     """
@@ -258,6 +154,9 @@ async def agent_stream(request: AgentRequest):
             yield f"event: session_created\ndata: {session_data}\n\n"
 
             agent = BudgetAgent(provider_name=request.provider)
+
+            # Disponibilizar modelo LLM no contexto para salvamento
+            request_model.set(agent.provider.model)
 
             async for evento in agent.process_stream(
                 mensagem_usuario=request.mensagem,
@@ -289,4 +188,3 @@ async def agent_stream(request: AgentRequest):
             "X-Accel-Buffering": "no"
         }
     )
-
