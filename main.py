@@ -3,6 +3,7 @@ ObradorIA Agent - Sistema inteligente de geração de orçamentos
 Entry point da aplicação
 """
 
+import os
 import uvicorn
 from contextlib import asynccontextmanager
 
@@ -52,12 +53,10 @@ app = FastAPI(
 )
 
 # CORS
+_settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:4200",  # Angular
-        "http://localhost:8891",  # Spring Boot
-    ],
+    allow_origins=[o.strip() for o in _settings.cors_origins.split(",")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -80,7 +79,7 @@ def main():
         "main:app",
         host=settings.api_host,
         port=settings.api_port,
-        reload=True
+        reload=os.getenv("ENV", "dev") == "dev"
     )
 
 

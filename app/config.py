@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     # JWT
     jwt_secret: str = "REDACTED"
 
+    # CORS
+    cors_origins: str = "http://localhost:4200,http://localhost:8891"
+
     # LLM padrão
     default_llm_provider: Literal["ollama", "openai", "anthropic"] = "ollama"
 
