@@ -33,7 +33,7 @@ async def verify_token(
         payload = jwt.decode(
             token,
             secret_bytes,
-            algorithms=["HS256"],
+            algorithms=["HS256", "HS384", "HS512"],
         )
         # Disponibilizar token para camadas internas (spring_client)
         request_token.set(token)
